@@ -73,6 +73,7 @@ class CEdit(activity.Activity):
         self.toolbar_box.connect(
                 "right-line-pos-changed", self.right_line_pos_changed)
         self.toolbar_box.connect("theme-changed", self.theme_changed)
+        self.toolbar_box.connect('save-to-journal', self.save_to_journal_cb)
         self.set_toolbar_box(self.toolbar_box)
 
         self.make_notebook()
@@ -96,6 +97,11 @@ class CEdit(activity.Activity):
             self.conf["right-line-pos"] = int(self.metadata["right-line-pos"])
             self.conf["show-right-line"] = \
                 bool(int(self.metadata["show-right-line"]))
+            self.conf["is-journal-file"] = bool(int(self.metadata["is-journal-file"]))
+            if self.conf["is-journal-file"]:
+                self.conf["journal-file"] = str(self.metadata["journal-file"])
+            else:
+                self.conf["journal-file"] = "None"
 
         else:
             self.conf = {
@@ -107,6 +113,8 @@ class CEdit(activity.Activity):
                 "theme": "classic",
                 "right-line-pos": 80,
                 "show-right-line": False,
+                "is-journal-file": False,
+                "journal-file": "None",
             }
 
     def make_notebook(self):
@@ -126,7 +134,10 @@ class CEdit(activity.Activity):
         self.notebook.connect("page-removed", self.page_removed)
 
         self.vbox.pack_start(self.notebook, True, True, 2)
-        if os.path.exists(self.index_file):
+
+        if self.conf["is-journal-file"]:
+            self.journal_wake(self.conf["journal-file"])
+        elif os.path.exists(self.index_file):
             self.instance_wake()
         else:
             self.new_page()
@@ -139,6 +150,15 @@ class CEdit(activity.Activity):
 
         if len(self.notebook.get_children()) == 0:
             self.new_page()
+
+    def save_to_journal_cb(self, toolbar):
+        views = self.notebook.get_children()
+        file_path = self.get_view().get_file()
+        if file_path:
+            file_name = utils.get_file_name(file_path)
+            self.conf["is-journal-file"] = True
+            self.conf["journal-file"] = file_path
+            self.metadata["title"] = file_name
 
     def set_language(self, infobar, language):
         buffer = self.get_view().buffer
@@ -231,15 +251,35 @@ class CEdit(activity.Activity):
         file_chooser.connect("open-file", self._open_file_from_chooser)
         file_chooser.show_all()
 
-    def instance_wake(self):
+    def get_index_list(self):
         with open(self.index_file, 'r') as f:
             path_list = [path.strip() for path in f.readlines()]
+        return path_list
 
-        os.remove(self.index_file)
+    def journal_wake(self, file_name):
+        index_paths = self.get_index_list()
+        if file_name in index_paths:
+            file_num = index_paths.index(file_name)
+            file_path = join(self.instance_path, str(file_num))
+            self._open_file_from_instance(file_path, file_name)
+        else:
+            self._open_file_from_journal(file_name)
+        self.remove_instance_file()
+
+    def remove_instance_file(self):
+        if os.path.exists(self.index_file):
+            path_list = self.get_index_list()
+            os.remove(self.index_file)
+            for x in range(len(path_list)):
+                file_path = join(self.instance_path, str(x))
+                os.remove(file_path)
+
+    def instance_wake(self):
+        path_list = self.get_index_list()
         for x in range(len(path_list)):
             file_path = join(self.instance_path, str(x))
             self._open_file_from_instance(file_path, path_list[x])
-            os.remove(file_path)
+        self.remove_instance_file()
 
     def file_chooser_save(self, widget, force=False, close=False):
         # Force is for "save as"
@@ -320,9 +360,16 @@ class CEdit(activity.Activity):
             dialog.destroy()
 
     def _open_file_from_instance(self, path, path_set):
-        self.new_page(label=path_set.split('/')[-1])
+        file_name = utils.get_file_name(path_set)
+        self.new_page(label=file_name)
         view = self.get_view(idx=-1)
         view.set_file_instance(path, path_set)
+    
+    def _open_file_from_journal(self, path):
+        file_name = utils.get_file_name(path)
+        self.new_page(label=file_name)
+        view = self.get_view(idx=-1)
+        view.set_file(path)
 
     def _open_file_from_chooser(self, widget, path):
         children = self.notebook.get_children()
@@ -499,12 +546,6 @@ class CEdit(activity.Activity):
                     f.write('\n')
                 x+=1
 
-        files = []
-        for scrolled in views:
-            view = scrolled.get_children()[0]
-            if view.get_file():
-                files.append(view.get_file)
-
         self.metadata["saved"] = True
         self.metadata["font"] = self.conf["font"]
         self.metadata["font-size"] = self.conf["font-size"]
@@ -514,6 +555,8 @@ class CEdit(activity.Activity):
         self.metadata["theme"] = self.conf["theme"]
         self.metadata["right-line-pos"] = self.conf["right-line-pos"]
         self.metadata["show-right-line"] = self.conf["show-right-line"]
+        self.metadata["is-journal-file"] = self.conf["is-journal-file"]
+        self.metadata["journal-file"] = self.conf["journal-file"]
 
     def _exit(self, *args):
         def _remove_page(widget, scrolled):

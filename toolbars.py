@@ -251,6 +251,7 @@ class ToolbarBox(SugarToolbarbox):
         "show-right-line-changed": (GObject.SIGNAL_RUN_LAST, None, [bool]),
         "right-line-pos-changed": (GObject.SIGNAL_RUN_LAST, None, [int]),
         "theme-changed": (GObject.SIGNAL_RUN_LAST, None, [str]),
+        "save-to-journal": (GObject.SIGNAL_RUN_LAST, None, []),
     }
 
     def __init__(self, activity):
@@ -292,6 +293,18 @@ class ToolbarBox(SugarToolbarbox):
 
         self.toolbar.insert(utils.make_separator(True), -1)
 
+        separator = Gtk.SeparatorToolItem()
+        separator.props.draw = True
+        self.toolbar.insert(separator, -1)
+        separator.show()
+
+        self._save_to_journal_button = ToolButton('save-to-journal')
+        self._save_to_journal_button.set_tooltip(_('Save current file to Journal'))
+        self._save_to_journal_button.connect('clicked',
+                                             self._save_journal)
+        self.toolbar.insert(self._save_to_journal_button, -1)
+        self._save_to_journal_button.show()
+
         stop_button = StopButton(activity)
         stop_button.props.accelerator = "<Ctrl><Shift>Q"
         self.toolbar.insert(stop_button, -1)
@@ -302,6 +315,9 @@ class ToolbarBox(SugarToolbarbox):
         self.entry_search = toolbar_edit.entry_search
         self.entry_replace = toolbar_edit.entry_replace
         self.spinner_right_line = toolbar_view.spinner_right_line
+
+    def _save_journal(self, button):
+        self.emit("save-to-journal")
 
     def _chooser_save(self, toolbar, force):
         self.emit("chooser-save", force)

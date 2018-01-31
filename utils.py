@@ -148,6 +148,11 @@ def get_path_name(path):
     return os.path.basename(gfile.get_path())
 
 
+def get_file_name(file_path):
+    file_name = file_path.split('/')[-1]
+    return file_name
+
+
 def set_border_radius(widget, r1=0, r2=0, r3=0, r4=0):
     name = "Gtk" + widget.__class__.__name__
     theme = "%s {border-radius: %dpx %dpx %dpx %dpx;}" % \
