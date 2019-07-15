@@ -39,6 +39,8 @@ from toolbars import ToolbarBox
 from sugar3.activity import activity
 from sugar3.graphics.alert import Alert
 from sugar3.graphics.alert import TimeoutAlert
+from sugar3.graphics.icon import Icon
+from sugar3.datastore import datastore
 
 
 class CEdit(activity.Activity):
@@ -151,14 +153,38 @@ class CEdit(activity.Activity):
         if len(self.notebook.get_children()) == 0:
             self.new_page()
 
+    def _create_journal_object(self, file_path):
+        self.dl_jobject = datastore.create()
+        filename = utils.get_file_name(file_path)
+        self.dl_jobject.metadata['title'] = filename
+        self.dl_jobject.metadata['is-journal-file'] = True
+        self.dl_jobject.metadata['journal-file'] = file_path
+        self.dl_jobject.metadata['mime_type'] = 'text/plain'
+        self.dl_jobject.file_path = file_path
+        datastore.write(self.dl_jobject)
+        self._journal_object_map_url[file_path] = self.dl_jobject.object_id
+
     def save_to_journal_cb(self, toolbar):
-        views = self.notebook.get_children()
-        file_path = self.get_view().get_file()
-        if file_path:
-            file_name = utils.get_file_name(file_path)
-            self.conf["is-journal-file"] = True
-            self.conf["journal-file"] = file_path
-            self.metadata["title"] = file_name
+        view = self.get_view()
+        file_path = view.get_file()
+        changed = view.get_buffer().get_modified()
+        if file_path and not changed:
+            if file_path in self._journal_object_map_url:
+                datastore.delete(self._journal_object_map_url[file_path])
+            self._create_journal_object(file_path)
+        else:
+            # Raise alert saying please save file in the file system
+            # before saving it as an instance
+            alert = Alert()
+            alert.props.title = _('Error')
+            alert.props.msg = _('Please save the file to your file system or save the latest changes, before saving it as a journal instance')
+            ok_icon = Icon(icon_name='dialog-ok')
+            alert.add_button(
+                    Gtk.ResponseType.OK, _('Ok'), icon=ok_icon)
+            ok_icon.show()
+            alert.connect("response", self._alert_response)
+            self.add_alert(alert)
+            alert.show()
 
     def set_language(self, infobar, language):
         buffer = self.get_view().buffer
@@ -520,15 +546,16 @@ class CEdit(activity.Activity):
             view = scrolled.get_children()[0]
             view.set_conf(self.conf)
 
-    def _alert_response(self, widget, response, scrolled):
-        if response == Gtk.ResponseType.NO:
-            self.remove_page_from_widget(None, scrolled, force=True)
+    def _alert_response(self, widget, response, scrolled=None):
+        if scrolled:
+            if response == Gtk.ResponseType.NO:
+                self.remove_page_from_widget(None, scrolled, force=True)
 
-        elif response == Gtk.ResponseType.YES:
-            self.file_chooser_save(None, False, True)
-
-        self.vbox.remove(self.alert)
-
+            elif response == Gtk.ResponseType.YES:
+                self.file_chooser_save(None, False, True)
+            self.vbox.remove(self.alert)
+        else:
+            self.remove_alert(widget)
     def write_file(self, file_path):
         x = 0
         views = self.notebook.get_children()
