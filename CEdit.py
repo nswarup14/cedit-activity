@@ -21,6 +21,7 @@
 import os
 from os.path import join
 from gettext import gettext as _
+import logging
 
 import utils
 import globals as G
@@ -41,13 +42,14 @@ from sugar3.graphics.alert import Alert
 from sugar3.graphics.alert import TimeoutAlert
 from sugar3.graphics.icon import Icon
 from sugar3.datastore import datastore
+from sugar3.graphics.objectchooser import ObjectChooser
 
 
 class CEdit(activity.Activity):
 
     def __init__(self, handle):
         activity.Activity.__init__(self, handle)
-        self.instance_path = join(activity.get_activity_root(),'instance')
+        self.instance_path = join(activity.get_activity_root(), 'instance')
         self.index_file = join(self.instance_path, 'index')
 
         self.get_conf()
@@ -55,6 +57,9 @@ class CEdit(activity.Activity):
         self.reopen = True
         self.vbox = Gtk.VBox()
         self.infobar = InfoBar()
+
+        self._journal_object_map_url = {}
+        self.dl_jobject = None
 
         self.toolbar_box = ToolbarBox(self)
         self.toolbar_box.connect("new-page", lambda toolbar: self.new_page())
@@ -76,6 +81,7 @@ class CEdit(activity.Activity):
                 "right-line-pos-changed", self.right_line_pos_changed)
         self.toolbar_box.connect("theme-changed", self.theme_changed)
         self.toolbar_box.connect('save-to-journal', self.save_to_journal_cb)
+        self.toolbar_box.connect('open-from-journal', self._open_from_journal_cb)
         self.set_toolbar_box(self.toolbar_box)
 
         self.make_notebook()
@@ -99,11 +105,6 @@ class CEdit(activity.Activity):
             self.conf["right-line-pos"] = int(self.metadata["right-line-pos"])
             self.conf["show-right-line"] = \
                 bool(int(self.metadata["show-right-line"]))
-            self.conf["is-journal-file"] = bool(int(self.metadata["is-journal-file"]))
-            if self.conf["is-journal-file"]:
-                self.conf["journal-file"] = str(self.metadata["journal-file"])
-            else:
-                self.conf["journal-file"] = "None"
 
         else:
             self.conf = {
@@ -115,8 +116,6 @@ class CEdit(activity.Activity):
                 "theme": "classic",
                 "right-line-pos": 80,
                 "show-right-line": False,
-                "is-journal-file": False,
-                "journal-file": "None",
             }
 
     def make_notebook(self):
@@ -137,9 +136,7 @@ class CEdit(activity.Activity):
 
         self.vbox.pack_start(self.notebook, True, True, 2)
 
-        if self.conf["is-journal-file"]:
-            self.journal_wake(self.conf["journal-file"])
-        elif os.path.exists(self.index_file):
+        if os.path.exists(self.index_file):
             self.instance_wake()
         else:
             self.new_page()
@@ -157,12 +154,30 @@ class CEdit(activity.Activity):
         self.dl_jobject = datastore.create()
         filename = utils.get_file_name(file_path)
         self.dl_jobject.metadata['title'] = filename
-        self.dl_jobject.metadata['is-journal-file'] = True
-        self.dl_jobject.metadata['journal-file'] = file_path
         self.dl_jobject.metadata['mime_type'] = 'text/plain'
+        self.dl_jobject.metadata['file_path'] = file_path
+        self.dl_jobject.metadata['is_journal'] = True
         self.dl_jobject.file_path = file_path
         datastore.write(self.dl_jobject)
         self._journal_object_map_url[file_path] = self.dl_jobject.object_id
+
+    def _open_from_journal_cb(self, toolbar):
+        chooser = ObjectChooser(self)
+        try:
+            result = chooser.run()
+            if result == Gtk.ResponseType.ACCEPT:
+                jobject = chooser.get_selected_object()
+                if jobject and jobject.file_path and jobject.metadata['is_journal']:
+                    filename = utils.get_file_name(jobject.metadata['file_path'])
+                    self.new_page(label=filename.encode('utf-8'))
+                    view = self.get_view(idx=-1)
+                    view.set_file(jobject.metadata['file_path'])
+            else:
+		    # Should an alert be added saying only file instances that have previously been
+		    # saved to journal can be opened?
+                pass
+        except Exception as e:
+            logging.error('_open_from_journal_cb: %s' %(e))
 
     def save_to_journal_cb(self, toolbar):
         view = self.get_view()
@@ -173,11 +188,11 @@ class CEdit(activity.Activity):
                 datastore.delete(self._journal_object_map_url[file_path])
             self._create_journal_object(file_path)
         else:
-            # Raise alert saying please save file in the file system
-            # before saving it as an instance
             alert = Alert()
             alert.props.title = _('Error')
-            alert.props.msg = _('Please save the file to your file system or save the latest changes, before saving it as a journal instance')
+            alert.props.msg = _('Please save the file to your \
+                                file system or save the latest changes, \
+                                before saving it as a journal instance')
             ok_icon = Icon(icon_name='dialog-ok')
             alert.add_button(
                     Gtk.ResponseType.OK, _('Ok'), icon=ok_icon)
@@ -282,16 +297,6 @@ class CEdit(activity.Activity):
             path_list = [path.strip() for path in f.readlines()]
         return path_list
 
-    def journal_wake(self, file_name):
-        index_paths = self.get_index_list()
-        if file_name in index_paths:
-            file_num = index_paths.index(file_name)
-            file_path = join(self.instance_path, str(file_num))
-            self._open_file_from_instance(file_path, file_name)
-        else:
-            self._open_file_from_journal(file_name)
-        self.remove_instance_file()
-
     def remove_instance_file(self):
         if os.path.exists(self.index_file):
             path_list = self.get_index_list()
@@ -390,12 +395,6 @@ class CEdit(activity.Activity):
         self.new_page(label=file_name)
         view = self.get_view(idx=-1)
         view.set_file_instance(path, path_set)
-    
-    def _open_file_from_journal(self, path):
-        file_name = utils.get_file_name(path)
-        self.new_page(label=file_name)
-        view = self.get_view(idx=-1)
-        view.set_file(path)
 
     def _open_file_from_chooser(self, widget, path):
         children = self.notebook.get_children()
@@ -560,7 +559,7 @@ class CEdit(activity.Activity):
         x = 0
         views = self.notebook.get_children()
 
-        with open(self.index_file,'w') as f:
+        with open(self.index_file, 'w') as f:
             for scrolled in views:
                 view = scrolled.get_children()[0]
                 name = view.get_file()
@@ -571,7 +570,7 @@ class CEdit(activity.Activity):
                 view.save_file_instance(path)
                 if not name or x != len(views) - 1:
                     f.write('\n')
-                x+=1
+                x += 1
 
         self.metadata["saved"] = True
         self.metadata["font"] = self.conf["font"]
@@ -582,8 +581,6 @@ class CEdit(activity.Activity):
         self.metadata["theme"] = self.conf["theme"]
         self.metadata["right-line-pos"] = self.conf["right-line-pos"]
         self.metadata["show-right-line"] = self.conf["show-right-line"]
-        self.metadata["is-journal-file"] = self.conf["is-journal-file"]
-        self.metadata["journal-file"] = self.conf["journal-file"]
 
     def _exit(self, *args):
         def _remove_page(widget, scrolled):
