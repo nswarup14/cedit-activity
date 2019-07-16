@@ -252,7 +252,7 @@ class ToolbarBox(SugarToolbarbox):
         "right-line-pos-changed": (GObject.SIGNAL_RUN_LAST, None, [int]),
         "theme-changed": (GObject.SIGNAL_RUN_LAST, None, [str]),
         "save-to-journal": (GObject.SIGNAL_RUN_LAST, None, []),
-        "open-from-journal" : (GObject.SIGNAL_RUN_LAST, None, []),
+        "open-from-journal": (GObject.SIGNAL_RUN_LAST, None, []),
     }
 
     def __init__(self, activity):
@@ -300,14 +300,16 @@ class ToolbarBox(SugarToolbarbox):
         separator.show()
 
         self._save_to_journal_button = ToolButton('save-to-journal')
-        self._save_to_journal_button.set_tooltip(_('Save current file to Journal'))
+        self._save_to_journal_button \
+            .set_tooltip(_('Save current file to Journal'))
         self._save_to_journal_button.connect('clicked',
                                              self._save_journal)
         self.toolbar.insert(self._save_to_journal_button, -1)
         self._save_to_journal_button.show()
 
         self._open_from_journal_button = ToolButton()
-        self._open_from_journal_button.set_tooltip(_('Open a file from the Journal'))
+        self._open_from_journal_button \
+            .set_tooltip(_('Open a file from the Journal'))
         self._open_from_journal_button.connect('clicked',
                                                self._open_journal)
         self.toolbar.insert(self._open_from_journal_button, -1)
@@ -326,7 +328,7 @@ class ToolbarBox(SugarToolbarbox):
 
     def _save_journal(self, button):
         self.emit("save-to-journal")
-    
+
     def _open_journal(self, button):
         self.emit("open-from-journal")
 

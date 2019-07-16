@@ -57,7 +57,9 @@ class InfoBar(Gtk.HBox):
         self.set_pos(1, 1)
 
     def set_pos(self, line, column):
-        self.label_pos.set_label(_("Line: %(line)s, Column: %(column)s") % ({'line': line, 'column': column}))
+        self.label_pos \
+            .set_label(_("Line: %(line)s, Column: %(column)s") %
+                   ({'line': line, 'column': column}))
 
     def set_language(self, language):
         if language != _("Plain text"):

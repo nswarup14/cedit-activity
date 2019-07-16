@@ -173,11 +173,12 @@ class CEdit(activity.Activity):
                     view = self.get_view(idx=-1)
                     view.set_file(jobject.metadata['file_path'])
             else:
-		    # Should an alert be added saying only file instances that have previously been
-		    # saved to journal can be opened?
+                # Should an alert be added saying
+                # only file instances that have
+                # previously been saved to journal can be opened?
                 pass
         except Exception as e:
-            logging.error('_open_from_journal_cb: %s' %(e))
+            logging.error('_open_from_journal_cb: %s' % (e))
 
     def save_to_journal_cb(self, toolbar):
         view = self.get_view()
@@ -190,9 +191,7 @@ class CEdit(activity.Activity):
         else:
             alert = Alert()
             alert.props.title = _('Error')
-            alert.props.msg = _('Please save the file to your \
-                                file system or save the latest changes, \
-                                before saving it as a journal instance')
+            alert.props.msg = _('Please save the file to your file system or save the latest changes, before saving it as a journal instance')
             ok_icon = Icon(icon_name='dialog-ok')
             alert.add_button(
                     Gtk.ResponseType.OK, _('Ok'), icon=ok_icon)
@@ -555,6 +554,7 @@ class CEdit(activity.Activity):
             self.vbox.remove(self.alert)
         else:
             self.remove_alert(widget)
+
     def write_file(self, file_path):
         x = 0
         views = self.notebook.get_children()
